@@ -27,6 +27,6 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
         with:
           debug: false
-          openai_base_url: "https://api.mistral.ai/v1"
+          openai_base_url: "https://codestral.mistral.ai/v1"
           openai_light_model: "mistral-tiny"
           openai_heavy_model: "mistral-small"
