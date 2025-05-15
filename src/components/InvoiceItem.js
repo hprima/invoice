@@ -11,6 +11,7 @@ class InvoiceItem extends React.Component {
     var currency = this.props.currency;
     var rowDel = this.props.onRowDel;
     var itemTable = this.props.items.map(function(item) {
+      console.log("trdt")
       return (
         <ItemRow onItemizedItemEdit={onItemizedItemEdit} item={item} onDelEvent={rowDel.bind(this)} key={item.id} currency={currency}/>
       )
