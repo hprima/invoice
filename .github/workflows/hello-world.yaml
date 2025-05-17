@@ -1,0 +1,50 @@
+name: Automated API Call and PR Comment
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+jobs:
+  process_diff:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Fetch base and head branches
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.ref }}:${{ github.event.pull_request.base.ref }}
+          git fetch origin ${{ github.event.pull_request.head.ref }}:${{ github.event.pull_request.head.ref }}
+
+      - name: Get PR diff
+        id: get_diff
+        run: |
+          DIFF_OUTPUT=$(git diff origin/${{ github.event.pull_request.base.ref }}..origin/${{ github.event.pull_request.head.ref }})
+          echo "$DIFF_OUTPUT" > diff_output.txt
+          cat diff_output.txt
+          
+      - name: Send prompt to Mistral API
+        id: send_prompt
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+        run: |
+          DIFF_CONTENT=$(cat diff_output.txt | jq -Rs .)  # Convert output to valid JSON string
+          PREPENDED_TEXT="Review the following diff and provide feedback on the changes. Focus on the aspects of code quality, functionality, performance. After reviewing, determine if the changes are ready to be approved or if further modifications are needed.\n\n"
+          FULL_CONTENT=$(echo -e "$PREPENDED_TEXT$DIFF_CONTENT" | jq -Rs .)
+
+          REQUEST_BODY=$(jq -n --arg model "mistral-medium" --arg temperature "0.7" --arg max_tokens "200" --arg content "$FULL_CONTENT" \
+          '{"model":$model, "messages":[{"role": "user", "content": $content}], "temperature":$temperature, "max_tokens":$max_tokens}')
+          
+          RESPONSE=$(curl -X POST "https://api.mistral.ai/v1/chat/completions" \
+            -H "Authorization: Bearer $MISTRAL_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$REQUEST_BODY")
+
+          echo "API_RESPONSE=$RESPONSE" >> $GITHUB_ENV
+          echo "$RESPONSE"
+
+      - name: Comment PR
+        uses: thollander/actions-comment-pull-request@v1
+        with:
+          message: '${{ env.API_RESPONSE}}'
+          GITHUB_TOKEN: ${{ secrets.TOKEN }}
