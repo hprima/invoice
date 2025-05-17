@@ -1,0 +1,55 @@
+name: Automated API Call and PR Comment
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+jobs:
+  process_diff:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Fetch base and head branches
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.ref }}:${{ github.event.pull_request.base.ref }}
+          git fetch origin ${{ github.event.pull_request.head.ref }}:${{ github.event.pull_request.head.ref }}
+
+      - name: Get PR diff
+        id: get_diff
+        run: |
+          DIFF_OUTPUT=$(git diff origin/${{ github.event.pull_request.base.ref }}..origin/${{ github.event.pull_request.head.ref }})
+          echo "$DIFF_OUTPUT" > diff_output.txt
+          cat diff_output.txt
+          
+      - name: Send prompt to Mistral API
+        id: send_prompt
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+        run: |
+          DIFF_CONTENT=$(cat diff_output.txt | jq -Rs .)  # Convert output to valid JSON string
+          REQUEST_BODY=$(jq -n --arg model "mistral-medium" --arg messages '[{"role": "user", "content": $DIFF_CONTENT}]' --arg temperature 0.7 --arg max_tokens 200 '{"model":$model, "messages":$messages, "temperature":$temperature, "max_tokens":$max_tokens}')
+          
+          echo "Request Body:"
+          echo "$REQUEST_BODY"
+          echo "$DIFF_CONTENT"
+
+          RESPONSE=$(curl -X POST "https://api.mistral.ai/v1/chat/completions" \
+            -H "Authorization: Bearer $MISTRAL_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$REQUEST_BODY")
+
+          echo "API_RESPONSE=$RESPONSE" >> $GITHUB_ENV
+
+      - name: Post API response as PR comment
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: "Mistral API Response: ${{ env.API_RESPONSE }}"
+            })
