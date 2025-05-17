@@ -1,0 +1,33 @@
+name: Automated API Call and PR Comment
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+jobs:
+  process_diff:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Fetch base and head branches
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.ref }}:${{ github.event.pull_request.base.ref }}
+          git fetch origin ${{ github.event.pull_request.head.ref }}:${{ github.event.pull_request.head.ref }}
+      
+      - name: Get diff code from last commit
+        id: get_diff
+        run: |
+            DIFF_OUTPUT=$(git diff origin/${{ github.event.pull_request.base.ref }}..origin/${{ github.event.pull_request.head.ref }})
+            echo "DIFF_CONTENT<<EOF" >> $GITHUB_ENV
+            echo "$DIFF_OUTPUT" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+    
+      - name: Call API with diff
+        id: call_api
+        env:
+              API_URL: "https://example.com/api"
+        run: |
+            echo "$DIFF_CONTENT"
+            
