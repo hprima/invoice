@@ -5,6 +5,8 @@ import Container from 'react-bootstrap/Container';
 import InvoiceForm from './components/InvoiceForm';
 
 class App extends Component {
+  console.log("testing the log");
+  console.log("testing the log12345");
   render() {
   return (
     <div className="App d-flex flex-column align-items-center justify-content-center w-100">
